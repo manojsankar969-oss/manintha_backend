@@ -18,7 +18,17 @@ const allowedOrigins = process.env.CORS_ORIGIN
 
 // 1. CORS Middleware (Must run before routes)
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (curl, mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    // Allow explicitly listed origins (env var)
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any Vercel preview deployment
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    // Allow any Render internal origin
+    if (origin.endsWith('.onrender.com')) return callback(null, true);
+    callback(null, false);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
 }));
