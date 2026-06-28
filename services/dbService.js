@@ -238,18 +238,35 @@ const getAnalytics = async () => {
   `);
   const mostUsedVehicle = vehicleRes.rows[0]?.vehicle_type || 'N/A';
 
-  // Revenue opportunity: prefer real upgrade_price, fall back to 40% uplift estimate
-  const revenueRes = await pool.query(`
-    SELECT COALESCE(SUM(
-      CASE 
-        WHEN upgrade_price IS NOT NULL AND upgrade_price != '' 
-        THEN COALESCE(NULLIF(REGEXP_REPLACE(upgrade_price, '[^0-9.]', '', 'g'), '')::NUMERIC, 0)
-        ELSE COALESCE(NULLIF(REGEXP_REPLACE(current_price, '[^0-9.]', '', 'g'), '')::NUMERIC, 0) * 0.4
-      END
-    ), 0) as revenue
-    FROM generations
-  `);
-  const revenueOpportunity = parseFloat(revenueRes.rows[0].revenue) || 0;
+  // Revenue opportunity: safely handle missing upgrade_price column
+  let revenueOpportunity = 0;
+  try {
+    const revenueRes = await pool.query(`
+      SELECT COALESCE(SUM(
+        COALESCE(NULLIF(REGEXP_REPLACE(current_price, '[^0-9.]', '', 'g'), '')::NUMERIC, 0) * 0.4
+      ), 0) as revenue
+      FROM generations
+    `);
+    revenueOpportunity = parseFloat(revenueRes.rows[0].revenue) || 0;
+    // If upgrade_price column exists, use it for newer records
+    try {
+      const realRevenueRes = await pool.query(`
+        SELECT COALESCE(SUM(
+          CASE 
+            WHEN upgrade_price IS NOT NULL AND upgrade_price != '' 
+            THEN COALESCE(NULLIF(REGEXP_REPLACE(upgrade_price, '[^0-9.]', '', 'g'), '')::NUMERIC, 0)
+            ELSE COALESCE(NULLIF(REGEXP_REPLACE(current_price, '[^0-9.]', '', 'g'), '')::NUMERIC, 0) * 0.4
+          END
+        ), 0) as revenue
+        FROM generations
+      `);
+      revenueOpportunity = parseFloat(realRevenueRes.rows[0].revenue) || 0;
+    } catch (_) {
+      // upgrade_price column doesn't exist yet — fallback value already set above
+    }
+  } catch (_) {
+    // Total fallback: 0
+  }
 
   // Rating distribution (1 to 5 stars)
   const trendRes = await pool.query(`
