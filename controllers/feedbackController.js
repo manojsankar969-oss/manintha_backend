@@ -7,8 +7,8 @@ const submitFeedback = async (req, res, next) => {
   const { generation_id, rating, comment } = req.body;
 
   try {
-    // Check if the generation exists first
-    const generation = await dbService.getGenerationById(generation_id);
+    // Check if the generation exists first (uses req.user for RBAC)
+    const generation = await dbService.getGenerationById(generation_id, req.user.id, req.user.role);
     if (!generation) {
       return res.status(404).json({ error: `Generation with ID ${generation_id} not found` });
     }
