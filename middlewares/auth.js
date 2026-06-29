@@ -1,16 +1,19 @@
 const { createClient } = require('@supabase/supabase-js');
 const { pool } = require('../config/db');
-require('dotenv').config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-let supabase;
-if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL') {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-} else {
-  console.warn('⚠️ Warning: Supabase client is not configured on the backend. Auth middleware will run in bypass/development mode if credentials are missing.');
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'YOUR_SUPABASE_URL') {
+  throw new Error('❌ Supabase client is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in your .env file.');
 }
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const adminEmails = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
 
 /**
  * Ensures that a user profile exists in our PostgreSQL database.
@@ -24,15 +27,12 @@ const ensureProfileExists = async (supabaseUser) => {
     const { rows } = await pool.query(checkQuery, [id]);
 
     if (rows.length === 0) {
-      // Determine role:
-      // 1. If email contains 'manoj' or is manojsankar969@gmail.com, make it admin.
-      // 2. If it's the first user in the database, make it admin.
-      // 3. Otherwise, staff.
       let role = 'staff';
       const emailLower = email.toLowerCase();
-      if (emailLower.includes('manoj') || emailLower === 'manojsankar969@gmail.com') {
+
+      if (adminEmails.length > 0 && adminEmails.includes(emailLower)) {
         role = 'admin';
-      } else {
+      } else if (adminEmails.length === 0) {
         const countQuery = 'SELECT COUNT(*) FROM profiles';
         const countRes = await pool.query(countQuery);
         if (parseInt(countRes.rows[0].count, 10) === 0) {
@@ -60,18 +60,6 @@ const ensureProfileExists = async (supabaseUser) => {
  * Middleware to require a valid Supabase JWT token.
  */
 const requireAuth = async (req, res, next) => {
-  // Support bypass mode for development if Supabase is not configured yet
-  if (!supabase) {
-    console.log('🛡️ Auth Bypass: Using development mock user.');
-    req.user = {
-      id: '00000000-0000-0000-0000-000000000000',
-      email: 'development@manivtha.com',
-      name: 'Development User',
-      role: 'admin'
-    };
-    return next();
-  }
-
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized. Bearer token required.' });

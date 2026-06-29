@@ -23,14 +23,6 @@ const getHistory = async (req, res, next) => {
       dbService.getHistoryCount(userId, role, search, filters)
     ]);
 
-    // Create an audit log for viewing history
-    await dbService.createAuditLog(
-      userId,
-      'VIEW_HISTORY',
-      `Page: ${page}, Limit: ${limit}, Search: "${search}"`,
-      req.ip
-    );
-
     return res.json({ data, total, page, limit });
   } catch (err) {
     next(err);
@@ -56,14 +48,6 @@ const getGenerationById = async (req, res, next) => {
     if (!generation) {
       return res.status(404).json({ error: 'Generation not found or access denied' });
     }
-
-    // Create audit log for viewing a specific generation
-    await dbService.createAuditLog(
-      userId,
-      'VIEW_GENERATION_DETAILS',
-      `Generation ID: ${targetId}`,
-      req.ip
-    );
 
     return res.json(generation);
   } catch (err) {

@@ -17,6 +17,11 @@ const {
 // All API routes require a valid Supabase JWT
 router.use(requireAuth);
 
+// 0. Current User Profile (returns role from DB)
+router.get('/auth/me', (req, res) => {
+  res.json(req.user);
+});
+
 // 1. Script Generation (with stricter rate limit)
 router.post('/generate', generateLimiter, validateGenerateInput, generateScript);
 
